@@ -1,7 +1,9 @@
 import json
 import logging
+import os
 import random
 import subprocess
+import sys
 import time
 
 from pyvirtualdisplay import Display
@@ -19,11 +21,13 @@ BASE_URL = 'https://www.instagram.com'
 
 
 class InstaPromo:
-
     def __init__(self):
         chrome_options = Options()
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-setuid-sandbox")
+        # mobile_emulation = {"deviceName": "Nexus 5"}
+        # chrome_options.add_experimental_option("mobileEmulation", mobile_emulation)
+
         self.driver = webdriver.Chrome(chrome_options=chrome_options)
         self.display = Display(visible=0, size=(800, 600))
         self.display.start()
@@ -57,6 +61,13 @@ class InstaPromo:
             lambda element: self.driver.find_element_by_xpath(
                 "//div[@role='dialog']/div//following::div[2]//following::button[1]"))
         not_now_button.click()
+
+    @staticmethod
+    def _write_username_to_file(username):
+        timestr = time.strftime("%Y-%m-%d")
+        filename = f"usernames{timestr}.txt"
+        with open(filename, "a") as f:
+            f.write(username + "\n")
 
     def login(self):
         """Perform logging to the site"""
@@ -105,11 +116,11 @@ class InstaPromo:
             self.driver.get(url)
             time.sleep(random.randint(2, 5))
             self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-            # random choice of picking most popular (1) or newest post (2) with preference to the second ones
-            option = random.choice(['1'] * 5 + ['2'] * 30)
-            post = self.driver.find_element_by_xpath(
-                f"//article//following::div[{option}]/div/div/div[{i+1}]/a")
-            post_url = post.get_attribute("href")
+            time.sleep(random.randint(2, 5))
+            # random choice of picking most popular (1) or newest post (2) with preference to the first ones
+            option = random.choice(['1'] * 20 + ['2'] * 10)
+            post_url = self.driver.find_element_by_xpath(
+                f"//article//following::div[{option}]/div/div/div[{i+1}]/a").get_attribute("href")
             logging.warning('Post url: ' + post_url[:-1])
             self.driver.get(post_url[:-1] + "?hl=en")
             try:
@@ -123,27 +134,45 @@ class InstaPromo:
                 follow_button = self.driver.find_element_by_xpath("//button[text()='Follow']")
                 follow_button.click()
                 print('\tFollowed.')
-
-                time.sleep(random.randint(5, 10))
-
-                logging.warning('Followed and liked post.')
+                # get user's nickname and write it to file
+                username = self.driver.find_element_by_xpath(
+                    "//header/div[2]/div/div[1]/h2/a").get_attribute("href")
+                self._write_username_to_file(username)
+                logging.warning(f'Followed and liked post by {username}.')
             # if user was followed, post was liked before for some reason
             except (NoSuchElementException, TimeoutException):
                 e = 'Error following user/liking post. Perhaps it was already done.'
                 print(e)
                 logging.warning(e)
+                continue
 
     def promote(self):
-        """Main method"""
+        """Main method of promoting"""
         quantity = random.randint(300, 400)
         for _ in range(quantity):
             self.promote_via_tags()
             self.promote_via_location()
-
-        cookies = self.driver.get_cookies()
-        for cookie in cookies:
-            self.driver.add_cookie(cookie)
         self.driver.quit()
+
+    def unfollow(self, filename):
+        """Unfollowing people using their usernames from specified file"""
+        with open(filename, 'r') as f:
+            links = list(f.readlines())
+        for link in links:
+            self.driver.get(link+"?hl=en")
+            try:
+                self.driver.find_element_by_xpath("//button[text()='Following']").click()
+                time.sleep(random.randint(2, 5))
+                self.driver.find_element_by_xpath("//button[text()='Unfollow']").click()
+                logging.warning('Unfollowed: ' + link)
+            except NoSuchElementException:
+                e = 'Not following this account already.'
+                print(e)
+                logging.warning(e)
+                continue
+        self.driver.quit()
+        # delete the file afterwards
+        os.remove(filename)
 
 
 def kill_processes():
@@ -158,8 +187,14 @@ def kill_processes():
 
 if __name__ == "__main__":
     kill_processes()
-
     promoter = InstaPromo()
     logging.warning("\n*** New bot session ***")
     promoter.login()
-    promoter.promote()
+    try:
+        if sys.argv[1] == 'unfollow':
+            promoter.unfollow(sys.argv[2])
+        elif sys.argv[1] == 'promote':
+            promoter.promote()
+    except IndexError:
+        print('You need to specify an argument!')
+
