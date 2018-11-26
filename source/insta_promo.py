@@ -12,7 +12,7 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 
-from exceptions.exceptions import LoginException
+from exceptions.exceptions import LoginException, BotLaunchException, BlockedBotException
 
 logging.basicConfig(filename="insta-logs.log",
                     format="%(asctime)s - %(levelname)s - %(message)s", datefmt='%d-%b-%y %H:%M:%S')
@@ -61,6 +61,20 @@ class InstaPromo:
             lambda element: self.driver.find_element_by_xpath(
                 "//div[@role='dialog']/div//following::div[2]//following::button[1]"))
         not_now_button.click()
+
+    def is_blocked(self):
+        # if profile button is present on page, then bot is not blocked
+        try:
+            profile_button = WebDriverWait(self.driver, 10).until(
+                lambda element: self.driver.find_element_by_xpath("//a[text()='Profile']"))
+            if profile_button:
+                return False
+        except (TimeoutException, NoSuchElementException):
+            return True
+
+    def quit(self):
+        """Quit the bot"""
+        self.driver.quit()
 
     @staticmethod
     def _write_username_to_file(username):
@@ -170,7 +184,7 @@ class InstaPromo:
                 print(e)
                 logging.warning(e)
                 continue
-        self.driver.quit()
+        self.quit()
         # delete the file afterwards
         os.remove(filename)
 
@@ -187,14 +201,19 @@ def kill_processes():
 
 if __name__ == "__main__":
     kill_processes()
-    promoter = InstaPromo()
-    logging.warning("\n*** New bot session ***")
-    promoter.login()
-    try:
+    if len(sys.argv) >= 2:
+        promoter = InstaPromo()
+        logging.warning("\n*** New bot session ***")
+        promoter.login()
+        if promoter.is_blocked():
+            try:
+                raise BlockedBotException('Unfortunately, the bot was blocked.')
+            finally:
+                promoter.quit()
         if sys.argv[1] == 'unfollow':
             promoter.unfollow(sys.argv[2])
         elif sys.argv[1] == 'promote':
             promoter.promote()
-    except IndexError:
-        print('You need to specify an argument!')
+    else:
+        raise BotLaunchException('You need to specify an argument!')
 
