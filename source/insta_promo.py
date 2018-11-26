@@ -32,28 +32,26 @@ class InstaPromo:
         self.display = Display(visible=0, size=(800, 600))
         self.display.start()
 
+        # get users credentials from config.json
+        with open("config.json") as f:
+            login_data = json.load(f)
+        self.username, self.password = login_data['username'], login_data['password']
+
     @staticmethod
     def get_tag():
         """Get a random tag from tags.txt file"""
         with open('tags.txt', 'r') as f:
             tags = list(f.readlines())
-            i = random.randrange(len(tags))
-        return tags[i].split('#')[-1].strip()
+            tag = random.choice(tags)
+        return tag.strip()
 
     @staticmethod
     def get_place():
         """Get a random geolocation from places.txt file"""
         with open('places.txt', 'r') as f:
-            tags = list(f.readlines())
-            i = random.randrange(len(tags))
-        return tags[i]
-
-    @staticmethod
-    def get_credentials():
-        """Get username and password from config.json"""
-        with open("config.json") as f:
-            login_data = json.load(f)
-        return login_data["username"], login_data["password"]
+            places = list(f.readlines())
+            place = random.choice(places)
+        return place.strip()
 
     def _disable_notifications(self):
         """Click 'Not now' to disable notifications after logging into an account"""
@@ -63,12 +61,12 @@ class InstaPromo:
         not_now_button.click()
 
     def is_blocked(self):
-        # if profile button is present on page, then bot is not blocked
+        """Checks whether bot is blocked ot not"""
         try:
-            profile_button = WebDriverWait(self.driver, 10).until(
+            # if profile button is present on page, then bot is not blocked
+            WebDriverWait(self.driver, 5).until(
                 lambda element: self.driver.find_element_by_xpath("//a[text()='Profile']"))
-            if profile_button:
-                return False
+            return False
         except (TimeoutException, NoSuchElementException):
             return True
 
@@ -86,25 +84,33 @@ class InstaPromo:
     def login(self):
         """Perform logging to the site"""
         self.driver.get(f"{BASE_URL}/accounts/login/?hl=en")
-        username, password = self.get_credentials()
-        # webdriver's going to wait max 10 seconds for email's field, password field, login button to display
-        username_element = WebDriverWait(self.driver, 10).until(
-            lambda element: self.driver.find_element_by_name("username"))
-        password_element = WebDriverWait(self.driver, 10).until(
-            lambda element: self.driver.find_element_by_name("password"))
+        if not self.username or not self.password:
+            self.quit()
+            raise LoginException("Please fill in <config.json> file with your credentials.")
+        # webdriver is going to wait max 10 seconds for email's field, password field, login button to display
+        try:
+            username_element = WebDriverWait(self.driver, 10).until(
+                lambda element: self.driver.find_element_by_name("username"))
+            password_element = WebDriverWait(self.driver, 10).until(
+                lambda element: self.driver.find_element_by_name("password"))
+        except NoSuchElementException as e:
+            logging.exception(e)
+            raise e
         try:
             username_element.clear()
-            username_element.send_keys(username)
+            username_element.send_keys(self.username)
             password_element.clear()
-            password_element.send_keys(password)
+            password_element.send_keys(self.password)
             login_button = WebDriverWait(self.driver, 10).until(
                 lambda element: self.driver.find_element_by_xpath("//button[text()='Log in']"))
             login_button.click()
             print("Logged in.")
             logging.warning("Logged in.")
             time.sleep(random.randint(1, 5))
-        except LoginException:
-            logging.exception("Can't log in to the site. Please check your credentials!")
+        except LoginException as e:
+            self.quit()
+            logging.exception("Can't log into account. Please check your credentials!")
+            raise e
 
     def promote_via_tags(self):
         """Search posts by random tag, like posts and follow their owners"""
@@ -132,11 +138,11 @@ class InstaPromo:
             self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
             time.sleep(random.randint(2, 5))
             # random choice of picking most popular (1) or newest post (2) with preference to the first ones
-            option = random.choice(['1'] * 20 + ['2'] * 10)
+            option = random.choice('1' * 20 + '2' * 10)
             post_url = self.driver.find_element_by_xpath(
-                f"//article//following::div[{option}]/div/div/div[{i+1}]/a").get_attribute("href")
-            logging.warning('Post url: ' + post_url[:-1])
-            self.driver.get(post_url[:-1] + "?hl=en")
+                f"//article//following::div[{option}]/div/div/div[{i+1}]/a").get_attribute("href")[:-1]
+            logging.warning('Post url: ' + post_url)
+            self.driver.get(post_url + "?hl=en")
             try:
                 # wait until presence of like button
                 like = WebDriverWait(self.driver, 10).until(
@@ -155,9 +161,10 @@ class InstaPromo:
                 logging.warning(f'Followed and liked post by {username}.')
             # if user was followed, post was liked before for some reason
             except (NoSuchElementException, TimeoutException):
-                e = 'Error following user/liking post. Perhaps it was already done.'
-                print(e)
-                logging.warning(e)
+                error = 'Error following user/liking post. Perhaps it was already done.'
+                print(error)
+                logging.warning(error)
+                # go to the next post
                 continue
 
     def promote(self):
@@ -183,24 +190,20 @@ class InstaPromo:
                 e = 'Not following this account already.'
                 print(e)
                 logging.warning(e)
+                # go to the next person
                 continue
         self.quit()
         # delete the file afterwards
         os.remove(filename)
 
 
-def kill_processes():
-    """Killing processes to clean memory"""
-    try:
-        subprocess.call("killall chromium-browse", shell=True)
-        subprocess.call("killall chromium-browser", shell=True)
-        subprocess.call("killall chromedriver", shell=True)
-    except subprocess.SubprocessError:
-        pass
+def kill_process():
+    """Kill chromedriver process"""
+    subprocess.call("killall chromedriver", shell=True)
 
 
 if __name__ == "__main__":
-    kill_processes()
+    kill_process()
     if len(sys.argv) >= 2:
         promoter = InstaPromo()
         logging.warning("\n*** New bot session ***")
