@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import random
-import subprocess
 import sys
 import time
 
@@ -12,6 +11,7 @@ from selenium.common.exceptions import NoSuchElementException, TimeoutException
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 
+import helpers
 from exceptions.exceptions import LoginException, BotLaunchException, BlockedBotException
 
 logging.basicConfig(filename="insta-logs.log",
@@ -37,22 +37,6 @@ class InstaPromo:
             login_data = json.load(f)
         self.username, self.password = login_data['username'], login_data['password']
 
-    @staticmethod
-    def get_tag():
-        """Get a random tag from tags.txt file"""
-        with open('tags.txt', 'r') as f:
-            tags = list(f.readlines())
-            tag = random.choice(tags)
-        return tag.strip()
-
-    @staticmethod
-    def get_place():
-        """Get a random geolocation from places.txt file"""
-        with open('places.txt', 'r') as f:
-            places = list(f.readlines())
-            place = random.choice(places)
-        return place.strip()
-
     def _disable_notifications(self):
         """Click 'Not now' to disable notifications after logging into an account"""
         not_now_button = WebDriverWait(self.driver, 15).until(
@@ -73,13 +57,6 @@ class InstaPromo:
     def quit(self):
         """Quit the bot"""
         self.driver.quit()
-
-    @staticmethod
-    def _write_username_to_file(username):
-        timestr = time.strftime("%Y-%m-%d")
-        filename = f"usernames{timestr}.txt"
-        with open(filename, "a") as f:
-            f.write(username + "\n")
 
     def login(self):
         """Perform logging to the site"""
@@ -114,7 +91,7 @@ class InstaPromo:
 
     def promote_via_tags(self):
         """Search posts by random tag, like posts and follow their owners"""
-        tag = self.get_tag()
+        tag = helpers.get_tag()
         time.sleep(random.randint(5, 10))
         print('#'+tag)
         logging.warning('#'+tag)
@@ -123,7 +100,7 @@ class InstaPromo:
 
     def promote_via_location(self):
         """Search posts by location"""
-        place = self.get_place()
+        place = helpers.get_place()
         time.sleep(random.randint(5, 10))
         print(place.split('/')[-1].strip())
         logging.warning(place.split('/')[-1].strip())
@@ -157,7 +134,7 @@ class InstaPromo:
                 # get user's nickname and write it to file
                 username = self.driver.find_element_by_xpath(
                     "//header/div[2]/div/div[1]/h2/a").get_attribute("href")
-                self._write_username_to_file(username)
+                helpers.write_username_to_file(username)
                 logging.warning(f'Followed and liked post by {username}.')
             # if user was followed, post was liked before for some reason
             except (NoSuchElementException, TimeoutException):
@@ -197,13 +174,8 @@ class InstaPromo:
         os.remove(filename)
 
 
-def kill_process():
-    """Kill chromedriver process"""
-    subprocess.call("killall chromedriver", shell=True)
-
-
 if __name__ == "__main__":
-    kill_process()
+    helpers.kill_process()
     if len(sys.argv) >= 2:
         promoter = InstaPromo()
         logging.warning("\n*** New bot session ***")
