@@ -33,7 +33,7 @@ class InstaPromo:
         self.display.start()
 
         # get users credentials from config.json
-        with open("config.json") as f:
+        with open("../config.json") as f:
             login_data = json.load(f)
         self.username, self.password = login_data['username'], login_data['password']
 
