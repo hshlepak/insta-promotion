@@ -50,9 +50,10 @@ class InstaPromo:
             # if profile button is present on page, then bot is not blocked
             WebDriverWait(self.driver, 5).until(
                 lambda element: self.driver.find_element_by_xpath("//a[text()='Profile']"))
-            return False
         except (TimeoutException, NoSuchElementException):
             return True
+        else:
+            return False
 
     def quit(self):
         """Quit the bot"""
@@ -81,13 +82,14 @@ class InstaPromo:
             login_button = WebDriverWait(self.driver, 10).until(
                 lambda element: self.driver.find_element_by_xpath("//button[text()='Log in']"))
             login_button.click()
-            print("Logged in.")
-            logging.warning("Logged in.")
-            time.sleep(random.randint(1, 5))
         except LoginException as e:
             self.quit()
             logging.exception("Can't log into account. Please check your credentials!")
             raise e
+        else:
+            print("Logged in.")
+            logging.warning("Logged in.")
+            time.sleep(random.randint(1, 5))
 
     def promote_via_tags(self):
         """Search posts by random tag, like posts and follow their owners"""
@@ -126,16 +128,12 @@ class InstaPromo:
                     lambda element: self.driver.find_element_by_xpath(
                         "//span[@aria-label='Like']"))
                 like.click()
-                print('\tLiked.')
                 time.sleep(random.randint(3, 5))
                 follow_button = self.driver.find_element_by_xpath("//button[text()='Follow']")
                 follow_button.click()
-                print('\tFollowed.')
                 # get user's nickname and write it to file
                 username = self.driver.find_element_by_xpath(
                     "//header/div[2]/div/div[1]/h2/a").get_attribute("href")
-                helpers.write_username_to_file(username)
-                logging.warning(f'Followed and liked post by {username}.')
             # if user was followed, post was liked before for some reason
             except (NoSuchElementException, TimeoutException):
                 error = 'Error following user/liking post. Perhaps it was already done.'
@@ -143,6 +141,9 @@ class InstaPromo:
                 logging.warning(error)
                 # go to the next post
                 continue
+            else:
+                helpers.write_username_to_file(username)
+                logging.warning(f'Followed and liked post by {username}.')
 
     def promote(self):
         """Main method of promoting"""
@@ -162,13 +163,14 @@ class InstaPromo:
                 self.driver.find_element_by_xpath("//button[text()='Following']").click()
                 time.sleep(random.randint(2, 5))
                 self.driver.find_element_by_xpath("//button[text()='Unfollow']").click()
-                logging.warning('Unfollowed: ' + link)
             except NoSuchElementException:
                 e = 'Not following this account already.'
                 print(e)
                 logging.warning(e)
                 # go to the next person
                 continue
+            else:
+                logging.warning('Unfollowed: ' + link)
         self.quit()
         # delete the file afterwards
         os.remove(filename)
